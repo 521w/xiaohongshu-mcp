@@ -1,0 +1,10 @@
+{
+    "name": "io.github.521w/xiaohongshu-mcp",
+    "description": "MCP Server for generating Xiaohongshu (小红书) content with 5 writing styles",
+    "url": "https://github.com/521w/xiaohongshu-mcp",
+    "tools": ["get_xiaohongshu_styles", "get_xiaohongshu_prompt", "get_xiaohongshu_tags"],
+    "categories": ["social-media", "content-creation", "marketing"],
+    "transport": "stdio",
+    "runtime": "python",
+    "license": "MIT"
+}
