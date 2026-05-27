@@ -1,15 +1,44 @@
 """Xiaohongshu MCP Server - Generate Xiaohongshu content templates."""
 import json
+import logging
+import sys
+from enum import Enum
+from typing import Any
+
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
+# ── 日志配置 ──────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stderr,
+)
+logger = logging.getLogger("xiaohongshu-mcp")
+
+# ── 版本 ──────────────────────────────────────────────
+VERSION = "0.2.0"
+
+# ── 类型定义 ──────────────────────────────────────────
+
+
+class ContentStyle(str, Enum):
+    """小红书内容风格枚举"""
+    CAOZHUONG = "caozhong"
+    CEPING = "ceping"
+    JIAOCHENG = "jiaocheng"
+    KAIXIANG = "kaixiang"
+    VLOG = "vlog"
+
+
 STYLES = {
-    "caozhong": "种草文",
-    "ceping": "测评文",
-    "jiaocheng": "教程文",
-    "kaixiang": "开箱文",
-    "vlog": "Vlog文案"
+    ContentStyle.CAOZHUONG.value: "种草文",
+    ContentStyle.CEPING.value: "测评文",
+    ContentStyle.JIAOCHENG.value: "教程文",
+    ContentStyle.KAIXIANG.value: "开箱文",
+    ContentStyle.VLOG.value: "Vlog文案",
 }
 
 PROMPTS = {
@@ -112,7 +141,7 @@ PROMPTS = {
 BGM建议：
 画面提示：
 
-请为以下主题生成Vlog文案："""
+请为以下主题生成Vlog文案：""",
 }
 
 TAGS = {
@@ -120,10 +149,13 @@ TAGS = {
     "ceping": "#测评 #真实测评 #避雷 #种草 #好物分享",
     "jiaocheng": "#教程 #手把手 #新手必看 #技能分享 #学习",
     "kaixiang": "#开箱 #新入手 #好物分享 #购物分享 #开箱视频",
-    "vlog": "#Vlog #日常 #生活方式 #记录生活 #治愈系"
+    "vlog": "#Vlog #日常 #生活方式 #记录生活 #治愈系",
 }
 
+# ── MCP Server ─────────────────────────────────────────
+
 app = Server("xiaohongshu-mcp")
+
 
 @app.list_tools()
 async def list_tools() -> list[Tool]:
@@ -136,12 +168,12 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "style": {
                         "type": "string",
-                        "description": "Content style",
-                        "enum": list(STYLES.keys()) + ["all"]
+                        "description": "Content style: caozhong (种草), ceping (测评), jiaocheng (教程), kaixiang (开箱), vlog, or all",
+                        "enum": list(STYLES.keys()) + ["all"],
                     }
                 },
-                "required": ["style"]
-            }
+                "required": ["style"],
+            },
         ),
         Tool(
             name="get_xiaohongshu_tags",
@@ -152,52 +184,76 @@ async def list_tools() -> list[Tool]:
                     "style": {
                         "type": "string",
                         "description": "Content style",
-                        "enum": list(STYLES.keys())
+                        "enum": list(STYLES.keys()),
                     }
                 },
-                "required": ["style"]
-            }
+                "required": ["style"],
+            },
         ),
         Tool(
             name="get_xiaohongshu_styles",
             description="List all available Xiaohongshu content styles with descriptions",
             inputSchema={
                 "type": "object",
-                "properties": {}
-            }
+                "properties": {},
+            },
         ),
     ]
 
+
 @app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    if name == "get_xiaohongshu_styles":
-        result = "\n".join([f"{k}: {v}" for k, v in STYLES.items()])
-        return [TextContent(type="text", text=result)]
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    try:
+        if name == "get_xiaohongshu_styles":
+            result = "\n".join([f"{k}: {v}" for k, v in STYLES.items()])
+            return [TextContent(type="text", text=result)]
 
-    elif name == "get_xiaohongshu_prompt":
-        style = arguments["style"]
-        if style == "all":
-            result = json.dumps(PROMPTS, ensure_ascii=False, indent=2)
-        elif style in PROMPTS:
-            result = PROMPTS[style]
+        elif name == "get_xiaohongshu_prompt":
+            style = arguments.get("style", "")
+            if not style:
+                return [TextContent(type="text", text="❌ 请指定风格 (style)")]
+
+            if style == "all":
+                result = json.dumps(PROMPTS, ensure_ascii=False, indent=2)
+            elif style in PROMPTS:
+                result = PROMPTS[style]
+            else:
+                available = ", ".join(STYLES.keys())
+                return [TextContent(type="text", text=f"❌ 未知风格: {style}\n可用: {available}")]
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_xiaohongshu_tags":
+            style = arguments.get("style", "")
+            if not style:
+                return [TextContent(type="text", text="❌ 请指定风格 (style)")]
+
+            result = TAGS.get(style)
+            if result is None:
+                available = ", ".join(TAGS.keys())
+                return [TextContent(type="text", text=f"❌ 未知风格: {style}\n可用: {available}")]
+            return [TextContent(type="text", text=result)]
+
         else:
-            result = f"Unknown style: {style}. Available: {', '.join(STYLES.keys())}"
-        return [TextContent(type="text", text=result)]
+            return [TextContent(type="text", text=f"❌ 未知工具: {name}")]
 
-    elif name == "get_xiaohongshu_tags":
-        style = arguments["style"]
-        result = TAGS.get(style, f"Unknown style: {style}")
-        return [TextContent(type="text", text=result)]
+    except Exception as e:
+        logger.exception(f"工具执行失败: {name}")
+        return [TextContent(type="text", text=f"❌ 执行失败: {e}")]
 
-    return [TextContent(type="text", text="Unknown tool")]
+
+# ── 入口 ─────────────────────────────────────────────
+
 
 async def main():
     async with stdio_server() as (read_stream, write_stream):
         await app.run(read_stream, write_stream, app.create_initialization_options())
 
+
 def run():
     import asyncio
     asyncio.run(main())
 
+
 if __name__ == "__main__":
+    logger.info(f"Xiaohongshu MCP Server v{VERSION} 启动")
     run()
