@@ -98,6 +98,19 @@ Agent drafts the final post using the returned structure.
 
 This server provides writing structures and prompt assets. It does not publish content, scrape Xiaohongshu, or bypass platform controls.
 
+## Verified Status
+
+Verified on Termux/Android with Python 3.13:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -e .
+xiaohongshu-mcp
+```
+
+MCP initialization, tool listing, and `get_xiaohongshu_styles` tool calls were verified successfully.
+
 ## License
 
 MIT
